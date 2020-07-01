@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Script for subdomain enumeration.
 # Required tools:
 # - amass (https://github.com/OWASP/Amass)
@@ -41,7 +41,7 @@ resolve_wordlist()
 {
     echo -e "${GREEN}[+] Generating subdomains from a wordlist of ($(wc -l < $WORDLIST) subdomains).${RESET}"
     tmp=$(mktemp)
-    sed "s/$/.$DOMAIN/" $WORDLIST >> $tmp    
+    sed "s/$/.$DOMAIN/" $WORDLIST >> $tmp
     # In order to view progress you can do "watch -n 0.1 wc -l zdns.json"
     $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $tmp -threads $ZDNS_RATE -output-file zdns.json -log-file zdns.log
     jq -r 'select(.status=="NOERROR") | .name' zdns.json > $tmp
@@ -56,7 +56,7 @@ resolve_dm()
 {
     echo -e "${GREEN}DM passive subdomain enumeration.${RESET}"
     tmp=$(mktemp)
-    $DM -k $DOMAIN > $tmp
+    python3 $DM -k $DOMAIN > $tmp
     cat $tmp >> $DOMAIN.combined
     sort -u $DOMAIN.combined -o $DOMAIN.combined
     echo -e "${YELLOW}[+] Found $(wc -l < $tmp) subdomains.${RESET}"
@@ -86,8 +86,7 @@ resolve_final()
 
 resolve_amass
 
-if [ "$DM" ]
-then
+if [ "$DM" ]; then
     resolve_dm
 fi
 
