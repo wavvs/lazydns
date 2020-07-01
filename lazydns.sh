@@ -23,7 +23,7 @@ ZDNS=/bin/zdns
 ALTDNS=~/.local/bin/altdns
 DM=$DM
 
-WORDLIST=$SCRIPT_PATH/humongous.txt
+WORDLIST=$SCRIPT_PATH/normal.txt
 AMASS_CONFIG=$SCRIPT_PATH/amass_config.ini
 RESOLVERS=$SCRIPT_PATH/resolvers.txt
 ZDNS_RATE=500
@@ -68,6 +68,7 @@ resolve_alt()
     echo -e "${GREEN}[+] Generating subdomain alterations.${RESET}"
     tmp=$(mktemp)
     cat $DOMAIN.combined | dnsgen - > $tmp
+    sort -u $tmp -o $tmp
     echo -e "${YELLOW}[+] $(wc -l < $tmp) alterations generated.${RESET}"
     $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $tmp -threads $ZDNS_RATE -output-file zdns_alt.json -log-file zdns.log
     jq -r 'select(.status=="NOERROR") | .name' zdns_alt.json > $tmp
