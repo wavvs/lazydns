@@ -90,5 +90,6 @@ if [ "$DM" ]; then
     resolve_dm
 fi
 
+resolve_wordlist
 resolve_alt
 resolve_final
