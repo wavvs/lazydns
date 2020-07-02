@@ -43,8 +43,8 @@ resolve_wordlist()
     tmp=$(mktemp)
     sed "s/$/.$DOMAIN/" $WORDLIST >> $tmp
     # In order to view progress you can do "watch -n 0.1 wc -l zdns.json"
-    $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $tmp -threads $ZDNS_RATE -output-file zdns.json -log-file zdns.log
-    jq -r 'select(.status=="NOERROR") | .name' zdns.json > $tmp
+    $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $tmp -threads $ZDNS_RATE -output-file $DOMAIN.wordlist.json -log-file zdns.log
+    jq -r 'select(.status=="NOERROR") | .name' $DOMAIN.wordlist.json > $tmp
     cat $tmp >> $DOMAIN.combined    
     sort -u $DOMAIN.combined -o $DOMAIN.combined
     echo -e "${YELLOW}[+] Found $(wc -l < $tmp) subdomains.${RESET}"
@@ -54,7 +54,7 @@ resolve_wordlist()
 # Private tool
 resolve_dm()
 {
-    echo -e "${GREEN}DM passive subdomain enumeration.${RESET}"
+    echo -e "${GREEN}[+] DM passive subdomain enumeration.${RESET}"
     tmp=$(mktemp)
     python3 $DM -k $DOMAIN > $tmp
     cat $tmp >> $DOMAIN.combined
@@ -70,8 +70,8 @@ resolve_alt()
     cat $DOMAIN.combined | dnsgen - > $tmp
     sort -u $tmp -o $tmp
     echo -e "${YELLOW}[+] $(wc -l < $tmp) alterations generated.${RESET}"
-    $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $tmp -threads $ZDNS_RATE -output-file zdns_alt.json -log-file zdns.log
-    jq -r 'select(.status=="NOERROR") | .name' zdns_alt.json > $tmp
+    $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $tmp -threads $ZDNS_RATE -output-file $DOMAIN.alt.json -log-file zdns.log
+    jq -r 'select(.status=="NOERROR") | .name' $DOMAIN.alt.json > $tmp
     echo -e "${YELLOW}[+] Found $(wc -l < $tmp) subdomains.${RESET}"
     cat $tmp >> $DOMAIN.combined
     sort -u $DOMAIN.combined -o $DOMAIN.combined
@@ -80,8 +80,8 @@ resolve_alt()
 resolve_final()
 {
     echo -e "${GREEN}[+] Final resolve.${RESET}"
-    $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $DOMAIN.combined -threads 5 -output-file zdns_final.json -log-file zdns.log
-    echo -e "${YELLOW}[+]Found total $(jq -r 'select(.status=="NOERROR") | .name' zdns_final.json | wc -l) active subdomains.${RESET}"
+    $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $DOMAIN.combined -threads 5 -output-file $DOMAIN.final.json -log-file zdns.log
+    echo -e "${YELLOW}[+] Found total $(jq -r 'select(.status=="NOERROR") | .name' $DOMAIN.final.json | wc -l) active subdomains.${RESET}"
 }
 
 
