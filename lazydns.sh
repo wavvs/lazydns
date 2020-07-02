@@ -80,7 +80,8 @@ resolve_alt()
 resolve_final()
 {
     echo -e "${GREEN}[+] Final resolve.${RESET}"
-    $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $DOMAIN.combined -threads 5 -output-file $DOMAIN.final.json -log-file zdns.log
+    # to be sure
+    $ZDNS alookup --name-servers=1.1.1.1 -input-file $DOMAIN.combined -threads 1 -output-file $DOMAIN.final.json -log-file zdns.log
     echo -e "${YELLOW}[+] Found total $(jq -r 'select(.status=="NOERROR") | .name' $DOMAIN.final.json | wc -l) active subdomains.${RESET}"
 }
 
