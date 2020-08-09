@@ -22,7 +22,7 @@ cd /tmp/zdns && go build -o $bin_path/zdns zdns/main.go
 cd $cwd && rm -rf /tmp/zdns
 
 echo -e "${GREEN}[*] Installing Amass${RESET}"
-GO111MODULE=on go get -u github.com/OWASP/Amass/v3/... &> /dev/null
+GO111MODULE=on go get github.com/OWASP/Amass/v3/... &> /dev/null
 cp $gobin/amass $bin_path/amass
 
 echo -e "${GREEN}[*] Installing Shuffledns${RESET}"
@@ -44,7 +44,7 @@ cd /tmp/dnsvalidator && sudo python3 setup.py --quiet install &> /dev/null
 cd $cwd && sudo rm -rf /tmp/dnsvalidator
 
 echo -e "${GREEN}[*] Installing pv${RESET}"
-sudo apt install pv -qq &> /dev/null
+sudo apt install -y pv -qq &> /dev/null
 
 echo -e "${GREEN}[*] Installing jq${RESET}"
-sudo apt install jq -qq &> /dev/null
+sudo apt install -y jq -qq &> /dev/null
