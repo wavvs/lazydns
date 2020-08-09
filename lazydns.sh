@@ -252,11 +252,11 @@ update_resolvers()
 
 resolve_amass()
 {
-    echo -e "${GREEN}[+] Running Amass subdomain enumeration.${RESET}"
-    echo -e "${BLUE}[*] Running passive enumeration.${RESET}"
+	echo -e "${GREEN}[+] Running Amass subdomain enumeration.${RESET}"
+	echo -e "${BLUE}[*] Running passive enumeration.${RESET}"
 	$amass enum -nolocaldb -d $_arg_domain -passive -config $_arg_config -o $_arg_domain.passive -log amass.log &> /dev/null
 	echo -e "${YELLOW}[*] Found $(wc -l < $_arg_domain.passive) subdomains on passive enumeration.${RESET}"
-    echo -e "${BLUE}[*] Running active enumeration.${RESET}"
+	echo -e "${BLUE}[*] Running active enumeration.${RESET}"
 	$amass enum -nolocaldb -d $_arg_domain -active -brute -config $_arg_config -nf $_arg_domain.passive -o $_arg_domain.active -log amass.log &> /dev/null 
 	echo -e "${YELLOW}[*] Found $(wc -l < $_arg_domain.active) subdomains on active enumeration.${RESET}"
 	cat "$_arg_domain.passive" "$_arg_domain.active" | sort -u >> "$_arg_domain.combined"
@@ -265,12 +265,12 @@ resolve_amass()
 
 resolve_wordlist()
 {
-    tmp=$(mktemp)
+	tmp=$(mktemp)
 	wordlist=$(mktemp)
-    sed "s/$/.$_arg_domain/" $_arg_wordlist > $tmp
-    echo -e "${GREEN}[+] Subdomains bruteforce. Total $(wc -l < $tmp) subdomains.${RESET}"
+	sed "s/$/.$_arg_domain/" $_arg_wordlist > $tmp
+	echo -e "${GREEN}[+] Subdomains bruteforce. Total $(wc -l < $tmp) subdomains.${RESET}"
 	echo -e "${BLUE}[*] Performing A lookup. Raw wordlist json file: $wordlist.${RESET}"
-    $zdns alookup --name-servers=@$_arg_resolvers -input-file $tmp -threads $_arg_threads -retries $_arg_retries -log-file zdns.log | pv -l -s $(wc -l < $tmp) > $wordlist
+	$zdns alookup --name-servers=@$_arg_resolvers -input-file $tmp -threads $_arg_threads -retries $_arg_retries -log-file zdns.log | pv -l -s $(wc -l < $tmp) > $wordlist
 	if [ "$_arg_wildcard" == "on" ]; then
 		echo -e "${BLUE}[*] Removing wildcards if any present.${RESET}"
 		jq -r 'select(.status=="NOERROR") | .name' $wordlist > $tmp
@@ -279,31 +279,31 @@ resolve_wordlist()
 		jq -r 'select(.status=="NOERROR") | .name' $wordlist > "$_arg_domain.wordlist"
 	fi
 	cat "$_arg_domain.wordlist" >> "$_arg_domain.combined"
-    sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
-    echo -e "${YELLOW}[+] Found $(wc -l < $_arg_domain.wordlist) subdomains.${RESET}"
-    rm $tmp
+	sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
+	echo -e "${YELLOW}[+] Found $(wc -l < $_arg_domain.wordlist) subdomains.${RESET}"
+	rm $tmp
 }
 
 # Private tool
 resolve_dm()
 {
-    echo -e "${GREEN}[+] DM passive subdomain enumeration.${RESET}"
-    tmp=$(mktemp)
-    python3 $_arg_dm -k $_arg_domain > $tmp
-    cat $tmp >> "$_arg_domain.combined"
-    sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
-    echo -e "${YELLOW}[+] Found $(wc -l < $tmp) subdomains.${RESET}"
-    rm $tmp
+	echo -e "${GREEN}[+] DM passive subdomain enumeration.${RESET}"
+	tmp=$(mktemp)
+	python3 $_arg_dm -k $_arg_domain > $tmp
+	cat $tmp >> "$_arg_domain.combined"
+	sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
+	echo -e "${YELLOW}[+] Found $(wc -l < $tmp) subdomains.${RESET}"
+	rm $tmp
 }
 
 resolve_alt()
 {
-    tmp=$(mktemp)
+	tmp=$(mktemp)
 	alts=$(mktemp)
-    cat "$_arg_domain.combined" | dnsgen -l 2 - | sort -u > $tmp
-    echo -e "${GREEN}[+] Alterations bruteforce. Total $(wc -l < $tmp) alterations.${RESET}"
-    echo -e "${BLUE}[*] Performing A lookup. Raw wordlist json file: $alts.${RESET}"
-    $zdns alookup --name-servers=@$_arg_resolvers -input-file $tmp -threads $_arg_threads -retries $_arg_retries -log-file zdns.log | pv -l -s $(wc -l < $tmp) > $alts
+	cat "$_arg_domain.combined" | dnsgen -l 2 - | sort -u > $tmp
+	echo -e "${GREEN}[+] Alterations bruteforce. Total $(wc -l < $tmp) alterations.${RESET}"
+	echo -e "${BLUE}[*] Performing A lookup. Raw wordlist json file: $alts.${RESET}"
+	$zdns alookup --name-servers=@$_arg_resolvers -input-file $tmp -threads $_arg_threads -retries $_arg_retries -log-file zdns.log | pv -l -s $(wc -l < $tmp) > $alts
 	if [ "$_arg_wildcard" == "on" ]; then
 		echo -e "${BLUE}[*] Removing wildcards if any present.${RESET}"
 		jq -r 'select(.status=="NOERROR") | .name' $alts > $tmp
@@ -312,9 +312,9 @@ resolve_alt()
 		jq -r 'select(.status=="NOERROR") | .name' $alts > "$_arg_domain.alt"
 	fi
 	
-    echo -e "${YELLOW}[+] Found $(wc -l < $_arg_domain.alt) subdomains.${RESET}"
-    cat "$_arg_domain.alt" >> "$_arg_domain.combined"
-    sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
+	echo -e "${YELLOW}[+] Found $(wc -l < $_arg_domain.alt) subdomains.${RESET}"
+	cat "$_arg_domain.alt" >> "$_arg_domain.combined"
+	sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
 	rm $tmp
 }
 
