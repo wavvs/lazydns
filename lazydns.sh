@@ -1,29 +1,39 @@
 #!/bin/bash
 #
-# ARG_POSITIONAL_SINGLE([domain],[domain to enumerate],[])
-# ARG_OPTIONAL_SINGLE([threads],[t],[zdns threads],[500])
-# ARG_OPTIONAL_SINGLE([config],[c],[path to amass configuration file],[./amass_config.ini])
-# ARG_OPTIONAL_SINGLE([wordlist],[w],[path to subdomains wordlist],[./normal.txt])
-# ARG_OPTIONAL_SINGLE([resolvers],[r],[path to resolvers list],[./resolvers.txt])
-# ARG_OPTIONAL_SINGLE([amass],[a],[path to amass binary],[/usr/bin/amass])
-# ARG_OPTIONAL_SINGLE([zdns],[z],[path to zdns binary],[/bin/zdns])
+# ARG_POSITIONAL_SINGLE([domain],[Domain to enumerate],[])
+# ARG_OPTIONAL_BOOLEAN([update],[u],[Update list of resolvers],[off])
+# ARG_OPTIONAL_BOOLEAN([on-amass],[],[Enable Amass subdomain enumeration],[on])
+# ARG_OPTIONAL_BOOLEAN([on-wordlist],[],[Enable subdomains bruteforce],[on])
+# ARG_OPTIONAL_BOOLEAN([on-alt],[],[Enable alterations bruteforce],[on])
+# ARG_OPTIONAL_SINGLE([config],[c],[Amass configuration file],[])
+# ARG_OPTIONAL_SINGLE([wordlist],[w],[Subdomains wordlist],[normal.txt])
+# ARG_OPTIONAL_SINGLE([resolvers],[r],[List of resolvers],[resolvers.txt])
+# ARG_OPTIONAL_SINGLE([threads],[t],[Subdomain bruteforce rate],[500])
+# ARG_OPTIONAL_SINGLE([retries],[s],[Subdomain bruteforce retries],[3])
 # ARG_OPTIONAL_SINGLE([dm],[m],[private tool],[])
-# ARG_HELP([lazydns usage])
+# ARG_HELP([Lazydns usage])
 # ARGBASH_GO()
 # needed because of Argbash --> m4_ignore([
+
+RED="\033[1;31m"
+GREEN="\033[1;32m"
+BLUE="\033[1;36m"
+YELLOW="\033[1;33m"
+RESET="\033[0m"
+
+
 die()
 {
-	local _ret=$2
-	test -n "$_ret" || _ret=1
-	test "$_PRINT_HELP" = yes && print_help >&2
+	local _ret="${2:-1}"
+	test "${_PRINT_HELP:-no}" = yes && print_help >&2
 	echo "$1" >&2
-	exit ${_ret}
+	exit "${_ret}"
 }
 
 
 begins_with_short_option()
 {
-	local first_option all_short_options='tcwrazmh'
+	local first_option all_short_options='ucwrmh'
 	first_option="${1:0:1}"
 	test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
 }
@@ -31,13 +41,17 @@ begins_with_short_option()
 # THE DEFAULTS INITIALIZATION - POSITIONALS
 _positionals=()
 # THE DEFAULTS INITIALIZATION - OPTIONALS
-SCRIPT_PATH=$(dirname $(realpath -s $0))
+script_path=$(dirname $(realpath -s $0))
+_arg_update="off"
+_arg_on_amass="on"
+_arg_on_wordlist="on"
+_arg_on_alt="on"
+_arg_wildcard="off"
+_arg_config=
+_arg_wordlist=$script_path/wordlists/normal.txt
+_arg_resolvers=$script_path/resolvers.txt
 _arg_threads="500"
-_arg_config="$SCRIPT_PATH/amass_config.ini"
-_arg_wordlist="$SCRIPT_PATH/normal.txt"
-_arg_resolvers="$SCRIPT_PATH/resolvers.txt"
-_arg_amass="/usr/bin/amass"
-_arg_zdns="/bin/zdns"
+_arg_retries="3"
 _arg_dm=
 
 banner() 
@@ -50,23 +64,24 @@ banner()
     echo "_/_/_/_/  _/    _/  _/_/_/_/_/      _/      _/_/_/    _/      _/  _/_/_/         ";
     echo "                                                                                 ";
     echo "                                                                                 ";
-    echo "|/x/|/o/|/x/|"
-    echo "|\x\|\x\|\o\|"
-    echo "|/o/|/o/|/o/|"
-    echo ""
 }
 
 print_help()
 {
-    banner
-	printf 'Usage: %s [-t|--threads <arg>] [-c|--config <arg>] [-w|--wordlist <arg>] [-r|--resolvers <arg>] [-a|--amass <arg>] [-z|--zdns <arg>] [-m|--dm <arg>] [-h|--help] <domain>\n' "$0"
-	printf '\t%s\n' "<domain>: domain to enumerate"
-	printf '\t%s\n' "-t, --threads: Zdns threads (default: '500')"
-	printf '\t%s\n' "-c, --config: Path to amass configuration file (default: './amass_config.ini')"
-	printf '\t%s\n' "-w, --wordlist: Path to subdomains wordlist (default: './normal.txt')"
-	printf '\t%s\n' "-r, --resolvers: Path to resolvers list (default: './resolvers.txt')"
-	printf '\t%s\n' "-a, --amass: Path to amass binary (default: '/usr/bin/amass')"
-	printf '\t%s\n' "-z, --zdns: Path to zdns binary (default: '/bin/zdns')"
+	banner
+	printf '%s\n' "Lazydns usage"
+	printf 'Usage: %s [-u|--(no-)update] [--(no-)on-amass] [--(no-)on-wordlist] [--(no-)on-alt] [--(no-)wildcard] [-c|--config <arg>] [-w|--wordlist <arg>] [-r|--resolvers <arg>] [-t|--threads <arg>] [-s|--retries <arg>] [-m|--dm <arg>] [-h|--help] <domain>\n' "$0"
+	printf '\t%s\n' "<domain>: Domain to enumerate"
+	printf '\t%s\n' "-u, --update, --no-update: Update list of resolvers (off by default)"
+	printf '\t%s\n' "--on-amass, --no-on-amass: Enable Amass subdomain enumeration (on by default)"
+	printf '\t%s\n' "--on-wordlist, --no-on-wordlist: Enable subdomains bruteforce (on by default)"
+	printf '\t%s\n' "--on-alt, --no-on-alt: Enable alterations bruteforce (on by default)"
+	printf '\t%s\n' "--wildcard, --no-wildcard: Remove wildcard responses using shuffledns (off by default)"
+	printf '\t%s\n' "-c, --config: Amass configuration file (no default)"
+	printf '\t%s\n' "-w, --wordlist: Subdomains wordlist (default: 'normal.txt')"
+	printf '\t%s\n' "-r, --resolvers: List of resolvers (default: 'resolvers.txt')"
+	printf '\t%s\n' "-t, --threads: Subdomain bruteforce rate (default: '500')"
+	printf '\t%s\n' "-s, --retries: Subdomain bruteforce retries (default: '3')"
 	printf '\t%s\n' "-m, --dm: private tool (no default)"
 	printf '\t%s\n' "-h, --help: Prints help"
 }
@@ -79,16 +94,33 @@ parse_commandline()
 	do
 		_key="$1"
 		case "$_key" in
-			-t|--threads)
-				test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
-				_arg_threads="$2"
-				shift
+			-u|--no-update|--update)
+				_arg_update="on"
+				test "${1:0:5}" = "--no-" && _arg_update="off"
 				;;
-			--threads=*)
-				_arg_threads="${_key##--threads=}"
+			-u*)
+				_arg_update="on"
+				_next="${_key##-u}"
+				if test -n "$_next" -a "$_next" != "$_key"
+				then
+					{ begins_with_short_option "$_next" && shift && set -- "-u" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
+				fi
 				;;
-			-t*)
-				_arg_threads="${_key##-t}"
+			--no-on-amass|--on-amass)
+				_arg_on_amass="on"
+				test "${1:0:5}" = "--no-" && _arg_on_amass="off"
+				;;
+			--no-on-wordlist|--on-wordlist)
+				_arg_on_wordlist="on"
+				test "${1:0:5}" = "--no-" && _arg_on_wordlist="off"
+				;;
+			--no-on-alt|--on-alt)
+				_arg_on_alt="on"
+				test "${1:0:5}" = "--no-" && _arg_on_alt="off"
+				;;
+			--no-wildcard|--wildcard)
+				_arg_wildcard="on"
+				test "${1:0:5}" = "--no-" && _arg_wildcard="off"
 				;;
 			-c|--config)
 				test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
@@ -123,27 +155,27 @@ parse_commandline()
 			-r*)
 				_arg_resolvers="${_key##-r}"
 				;;
-			-a|--amass)
+			-t|--threads)
 				test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
-				_arg_amass="$2"
+				_arg_threads="$2"
 				shift
 				;;
-			--amass=*)
-				_arg_amass="${_key##--amass=}"
+			--threads=*)
+				_arg_threads="${_key##--threads=}"
 				;;
-			-a*)
-				_arg_amass="${_key##-a}"
+			-t*)
+				_arg_threads="${_key##-t}"
 				;;
-			-z|--zdns)
+			-s|--retries)
 				test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
-				_arg_zdns="$2"
+				_arg_retries="$2"
 				shift
 				;;
-			--zdns=*)
-				_arg_zdns="${_key##--zdns=}"
+			--retries=*)
+				_arg_retries="${_key##--retries=}"
 				;;
-			-z*)
-				_arg_zdns="${_key##-z}"
+			-s*)
+				_arg_retries="${_key##-s}"
 				;;
 			-m|--dm)
 				test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
@@ -200,59 +232,55 @@ assign_positional_args()
 parse_commandline "$@"
 handle_passed_args_count
 assign_positional_args 1 "${_positionals[@]}"
-
-# OTHER STUFF GENERATED BY Argbash
-
-### END OF CODE GENERATED BY Argbash (sortof) ### ])
 # [ <-- needed because of Argbash
 
+# CHANGE HERE IF NEEDED
+amass=$script_path/bin/amass
+massdns=$script_path/bin/massdns
+zdns=$script_path/bin/zdns
+shuffledns=$script_path/bin/shuffledns
 
-
-RED="\033[1;31m"
-GREEN="\033[1;32m"
-BLUE="\033[1;36m"
-YELLOW="\033[1;33m"
-RESET="\033[0m"
-
-
-DOMAIN=$_arg_domain
-AMASS=$_arg_amass
-ZDNS=$_arg_zdns
-DM=$_arg_dm
-WORDLIST=$_arg_wordlist
-AMASS_CONFIG=$_arg_config
-RESOLVERS=$_arg_resolvers
-ZDNS_RATE=$_arg_threads
+update_resolvers()
+{
+	echo -e "${GREEN}[+] Updating resolvers.${RESET}"
+	tmp=$(mktemp)
+	python3 $script_path/publicdns.py > $tmp
+	dnsvalidator -tL $tmp -threads 20 --silent -o $script_path/resolvers.txt &> /dev/null
+	rm $tmp
+	echo -e "${YELLOW}[+] Found $(wc -l < $script_path/resolvers.txt) valid resolvers.${RESET}"
+}
 
 resolve_amass()
 {
     echo -e "${GREEN}[+] Running Amass subdomain enumeration.${RESET}"
-    
     echo -e "${BLUE}[*] Running passive enumeration.${RESET}"
-    $AMASS enum -nolocaldb -d $DOMAIN -passive -config $AMASS_CONFIG -o $DOMAIN.passive -log amass.log 1&>/dev/null
-    echo -e "${YELLOW}[*] Found $(wc -l < $DOMAIN.passive) subdomains on passive enumeration.${RESET}"
-
+	$amass enum -nolocaldb -d $_arg_domain -passive -config $_arg_config -o $_arg_domain.passive -log amass.log &> /dev/null
+	echo -e "${YELLOW}[*] Found $(wc -l < $_arg_domain.passive) subdomains on passive enumeration.${RESET}"
     echo -e "${BLUE}[*] Running active enumeration.${RESET}"
-    $AMASS enum -nolocaldb -d $DOMAIN -active -brute -config $AMASS_CONFIG -nf $DOMAIN.passive -o $DOMAIN.active -log amass.log 1&>/dev/null 
-    echo -e "${YELLOW}[*] Found $(wc -l < $DOMAIN.active) subdomains on active enumeration.${RESET}"
-    
-
-    cat $DOMAIN.passive $DOMAIN.active | sort -u > $DOMAIN.combined
-    echo -e "${YELLOW}[+] Found $(wc -l < $DOMAIN.combined) subdomains.${RESET}"
+	$amass enum -nolocaldb -d $_arg_domain -active -brute -config $_arg_config -nf $_arg_domain.passive -o $_arg_domain.active -log amass.log &> /dev/null 
+	echo -e "${YELLOW}[*] Found $(wc -l < $_arg_domain.active) subdomains on active enumeration.${RESET}"
+	cat "$_arg_domain.passive" "$_arg_domain.active" | sort -u >> "$_arg_domain.combined"
+	echo -e "${YELLOW}[+] Found $(wc -l < $_arg_domain.combined) subdomains.${RESET}"
 }
 
 resolve_wordlist()
 {
-    # BEWARE OF WILDCARDS :)
-    echo -e "${GREEN}[+] Generating subdomains from a wordlist of total ($(wc -l < $WORDLIST) subdomains).${RESET}"
     tmp=$(mktemp)
-    sed "s/$/.$DOMAIN/" $WORDLIST >> $tmp
-    # In order to view progress you can do "watch -n 0.1 wc -l zdns.json"
-    $ZDNS alookup --name-servers=@$RESOLVERS -input-file $tmp -threads $ZDNS_RATE -output-file $DOMAIN.wordlist.json -log-file zdns.log
-    jq -r 'select(.status=="NOERROR") | .name' $DOMAIN.wordlist.json > $tmp
-    cat $tmp >> $DOMAIN.combined    
-    sort -u $DOMAIN.combined -o $DOMAIN.combined
-    echo -e "${YELLOW}[+] Found $(wc -l < $tmp) subdomains.${RESET}"
+	wordlist=$(mktemp)
+    sed "s/$/.$_arg_domain/" $_arg_wordlist > $tmp
+    echo -e "${GREEN}[+] Subdomains bruteforce. Total $(wc -l < $tmp) subdomains.${RESET}"
+	echo -e "${BLUE}[*] Performing A lookup. Raw wordlist json file: $wordlist.${RESET}"
+    $zdns alookup --name-servers=@$_arg_resolvers -input-file $tmp -threads $_arg_threads -retries $_arg_retries -log-file zdns.log | pv -l -s $(wc -l < $tmp) > $wordlist
+	if [ "$_arg_wildcard" == "on" ]; then
+		echo -e "${BLUE}[*] Removing wildcards if any present.${RESET}"
+		jq -r 'select(.status=="NOERROR") | .name' $wordlist > $tmp
+		$shuffledns -d $_arg_domain -list $tmp -r $_arg_resolvers -massdns $massdns -retries $_arg_retries -silent -t $_arg_threads -wt 50 | pv -l -s $(wc -l < $tmp) > $_arg_domain.wordlist
+	else
+		jq -r 'select(.status=="NOERROR") | .name' $wordlist > "$_arg_domain.wordlist"
+	fi
+	cat "$_arg_domain.wordlist" >> "$_arg_domain.combined"
+    sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
+    echo -e "${YELLOW}[+] Found $(wc -l < $_arg_domain.wordlist) subdomains.${RESET}"
     rm $tmp
 }
 
@@ -261,54 +289,55 @@ resolve_dm()
 {
     echo -e "${GREEN}[+] DM passive subdomain enumeration.${RESET}"
     tmp=$(mktemp)
-    python3 $DM -k $DOMAIN > $tmp
-    cat $tmp >> $DOMAIN.combined
-    sort -u $DOMAIN.combined -o $DOMAIN.combined
+    python3 $_arg_dm -k $_arg_domain > $tmp
+    cat $tmp >> "$_arg_domain.combined"
+    sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
     echo -e "${YELLOW}[+] Found $(wc -l < $tmp) subdomains.${RESET}"
     rm $tmp
 }
 
 resolve_alt()
 {
-    echo -e "${GREEN}[+] Generating subdomain alterations.${RESET}"
     tmp=$(mktemp)
-    cat $DOMAIN.combined | dnsgen - | sort -u > $tmp
-    echo -e "${BLUE}[*] $(wc -l < $tmp) alterations generated. Starting DNS A records lookup.${RESET}"
-    $ZDNS alookup --name-servers=@$SCRIPT_PATH/resolvers.txt -input-file $tmp -threads $ZDNS_RATE -output-file $DOMAIN.alt.json -log-file zdns.log
-    jq -r 'select(.status=="NOERROR") | .name' $DOMAIN.alt.json > $tmp
-    echo -e "${YELLOW}[+] Found $(wc -l < $tmp) subdomains.${RESET}"
-    cat $tmp >> $DOMAIN.combined
-    sort -u $DOMAIN.combined -o $DOMAIN.combined
+	alts=$(mktemp)
+    cat "$_arg_domain.combined" | dnsgen -l 2 - | sort -u > $tmp
+    echo -e "${GREEN}[+] Alterations bruteforce. Total $(wc -l < $tmp) alterations.${RESET}"
+    echo -e "${BLUE}[*] Performing A lookup. Raw wordlist json file: $alts.${RESET}"
+    $zdns alookup --name-servers=@$_arg_resolvers -input-file $tmp -threads $_arg_threads -retries $_arg_retries -log-file zdns.log | pv -l -s $(wc -l < $tmp) > $alts
+	if [ "$_arg_wildcard" == "on" ]; then
+		echo -e "${BLUE}[*] Removing wildcards if any present.${RESET}"
+		jq -r 'select(.status=="NOERROR") | .name' $alts > $tmp
+		$shuffledns -d $_arg_domain -list $tmp -r $_arg_resolvers -massdns $massdns -retries $_arg_retries -silent -t $_arg_threads -wt 50 | pv -l -s $(wc -l < $tmp) > $_arg_domain.alt
+	else
+		jq -r 'select(.status=="NOERROR") | .name' $alts > "$_arg_domain.alt"
+	fi
+	
+    echo -e "${YELLOW}[+] Found $(wc -l < $_arg_domain.alt) subdomains.${RESET}"
+    cat "$_arg_domain.alt" >> "$_arg_domain.combined"
+    sort -u "$_arg_domain.combined" -o "$_arg_domain.combined"
+	rm $tmp
 }
-
-resolve_final()
-{
-    echo -e "${GREEN}[+] Final resolve.${RESET}"
-    $ZDNS alookup --name-servers=1.1.1.1 -input-file $DOMAIN.combined -threads 1 -output-file $DOMAIN.final.json -log-file zdns.log
-    echo -e "${YELLOW}[+] Found total $(jq -r 'select(.status=="NOERROR") | .name' $DOMAIN.final.json | wc -l) active subdomains.${RESET}"
-}
-
 
 banner
 
-if [ "$AMASS_DISABLE" != "true" ]; then
+if [ "$_arg_update" == "on" ]; then
+	update_resolvers
+fi
+
+if [ "$_arg_on_amass" == "on" ]; then
     resolve_amass
 fi
 
-if [ "$DM_DISABLE" != "true" ] && [ "$DM" ]; then
+if [ "$_arg_dm" ]; then
     resolve_dm
 fi
 
-if [ "$WORDLIST_DISABLE" != "true" ]; then
+if [ "$_arg_on_wordlist" == "on" ]; then
     resolve_wordlist
 fi
 
-if [ "$ALT_DISABLE" != "true" ]; then
+if [ "$_arg_on_alt" == "on" ]; then
     resolve_alt
-fi
-
-if [ "$FINAL_DISABLE" != "true" ]; then
-    resolve_final
 fi
 
 # ] <-- needed because of Argbash
