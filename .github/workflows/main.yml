@@ -1,0 +1,32 @@
+name: PublicDNS
+
+on:
+  schedule:
+    - cron: "0 0 */3 * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+      with:
+        persist-credentials: false
+        fetch-depth: 0 
+    - name: Validator
+      run: |
+        git clone https://github.com/vortexau/dnsvalidator.git && cd dnsvalidator
+        pip3 install setuptools wheel 
+        sudo python3 setup.py install
+        cd ..
+        dnsvalidator -tL resolvers.txt -threads 10 -timeout 500 -o tmp.txt
+        rm resolvers.txt
+        mv tmp.txt resolvers.txt
+    - name: Commit resolvers
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git commit -m "Update resolvers" -a
+    - name: GitHub Push
+      uses: ad-m/github-push-action@v0.6.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
