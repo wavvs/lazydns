@@ -18,9 +18,11 @@ jobs:
         pip3 install setuptools wheel 
         sudo python3 setup.py install
         cd ..
-        dnsvalidator -tL resolvers.txt -threads 10 -timeout 500 -o tmp.txt
-        rm resolvers.txt
-        mv tmp.txt resolvers.txt
+        python3 publicdns.py > tmp.txt
+        dnsvalidator -tL tmp.txt -threads 10 -timeout 500 -o resolvers.txt
+        sed -i '/^$/d' resolvers.txt
+        sort -u -V resolvers.txt -o resolvers.txt
+        rm tmp.txt
     - name: Commit resolvers
       run: |
         git config --local user.email "action@github.com"
