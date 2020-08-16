@@ -2,7 +2,7 @@ name: PublicDNS
 
 on:
   schedule:
-    - cron: "10 * * * *"
+    - cron: "0 8 * * *"
 
 jobs:
   build:
@@ -19,6 +19,7 @@ jobs:
         sudo python3 setup.py install
         cd .. && sudo rm -rf dnsvalidator
         python3 publicdns.py > tmp.txt
+        rm resolvers.txt
         dnsvalidator -tL tmp.txt -threads 10 -timeout 500 -o resolvers.txt
         sed -i '/^$/d' resolvers.txt
         sort -u -V resolvers.txt -o resolvers.txt
