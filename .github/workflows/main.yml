@@ -30,7 +30,7 @@ jobs:
         sed -i '/^$/d' resolvers.txt
         massdns/bin/massdns -q -r resolvers.txt --predictable -s 100 -o J -w nx_check.json nx_check.txt
         cat nx_check.json | grep NOERROR | jq -r '.resolver' | awk -F ":" '{print $1}' | sort -u > bad_resolvers.txt
-        for resolver in $(cat bad_resolvers.txt); sed -i "/${resolver}/d" resolvers.txt; done
+        for resolver in $(cat bad_resolvers.txt); do sed -i "/${resolver}/d" resolvers.txt; done
         sort -u -V resolvers.txt -o resolvers.txt
         rm -rf massdns/
         rm tmp.txt
