@@ -1,3 +1,6 @@
+import string
+import random
+import csv
 import click
 import requests
 import json
@@ -13,6 +16,8 @@ from colorama import init, Fore
 
 init(autoreset=True)
 
+
+PUBDNS_URL = 'https://public-dns.info/nameservers.csv'
 SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 SONAR_URL = 'https://sonar.omnisint.io/subdomains/{0}?page={1}'
 AMASS_PASSIVE = '{bin} enum -silent -nolocaldb -passive -exclude "Brute Forcing" -d {domains} -o {output} -log {log}'
@@ -153,6 +158,20 @@ def fetch_from_sonar(domains):
         except:
             return None
     return subdomains
+
+
+def fetch_resolvers():
+    r = requests.get(PUBDNS_URL).content.decode().split('\n')
+    data = csv.DictReader(r)
+    for i in data:
+        if i['reliability'] == '1.00' and i['dnssec'] == 'true':
+            print(i['ip_address'])
+
+
+def gen_nxdomain(num, domain):
+    for _ in range(num):
+        subdomain = ''.join(random.choice(string.ascii_lowercase) for i in range(16))
+        print(subdomain + '.' + domain)
 
 
 if __name__ == '__main__':
