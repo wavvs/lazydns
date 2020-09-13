@@ -3,8 +3,8 @@ name: PublicDNS
 on:
 	push:
   schedule:
-		- cron: "0 8 * * *" 
-	
+    - cron: "0 8 * * *"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,21 +22,21 @@ jobs:
         pip3 install setuptools wheel 
         sudo python3 setup.py install
         cd .. && sudo rm -rf dnsvalidator
-				python3 -c "from publicdns import fetch_resolvers; fetch_resolvers()" > tmp.txt
-				python3 -c "from publicdns import gen_nxdomain; gen_nxdomain(25000, 'google.com')" > nx_check.txt
-				python3 -c "from publicdns import gen_nxdomain; gen_nxdomain(25000, 'youtube.com')" >> nx_check.txt
+        python3 -c "from publicdns import fetch_resolvers; fetch_resolvers()" > tmp.txt
+        python3 -c "from publicdns import gen_nxdomain; gen_nxdomain(25000, 'google.com')" > nx_check.txt
+        python3 -c "from publicdns import gen_nxdomain; gen_nxdomain(25000, 'youtube.com')" >> nx_check.txt
 				rm resolvers.txt
         dnsvalidator -tL tmp.txt -threads 10 -timeout 500 -o resolvers.txt
-				sed -i '/^$/d' resolvers.txt
-				massdns/bin/massdns -q -r resolvers.txt --predictable -s 100 -o J -w nx_check.json nx_check.txt
-				cat nx_check.json | grep NOERROR | jq -r '.resolver' | awk -F ":" '{print $1}' | sort -u > bad_resolvers.txt
-				for resolver in $(cat bad_resolvers.txt); sed -i "/${resolver}/d" resolvers.txt; done
-				sort -u -V resolvers.txt -o resolvers.txt
-				rm -rf massdns/
-				rm tmp.txt
-				rm nx_check.txt
-				rm nx_check.json
-				rm bad_resolvers.txt
+        sed -i '/^$/d' resolvers.txt
+        massdns/bin/massdns -q -r resolvers.txt --predictable -s 100 -o J -w nx_check.json nx_check.txt
+        cat nx_check.json | grep NOERROR | jq -r '.resolver' | awk -F ":" '{print $1}' | sort -u > bad_resolvers.txt
+        for resolver in $(cat bad_resolvers.txt); sed -i "/${resolver}/d" resolvers.txt; done
+        sort -u -V resolvers.txt -o resolvers.txt
+        rm -rf massdns/
+        rm tmp.txt
+        rm nx_check.txt
+        rm nx_check.json
+        rm bad_resolvers.txt
     - name: Commit resolvers
       run: |
         git config --local user.email "action@github.com"
