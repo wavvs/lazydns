@@ -1,1 +1,2 @@
-amass_config.ini
+bin/*
+__pycache__/*
