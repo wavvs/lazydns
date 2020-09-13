@@ -1,7 +1,6 @@
 name: PublicDNS
 
 on:
-  push:
   schedule:
     - cron: "0 8 * * *"
 
