@@ -1,7 +1,7 @@
 name: PublicDNS
 
 on:
-	push:
+  push:
   schedule:
     - cron: "0 8 * * *"
 
@@ -25,7 +25,7 @@ jobs:
         python3 -c "from publicdns import fetch_resolvers; fetch_resolvers()" > tmp.txt
         python3 -c "from publicdns import gen_nxdomain; gen_nxdomain(25000, 'google.com')" > nx_check.txt
         python3 -c "from publicdns import gen_nxdomain; gen_nxdomain(25000, 'youtube.com')" >> nx_check.txt
-				rm resolvers.txt
+        rm resolvers.txt
         dnsvalidator -tL tmp.txt -threads 10 -timeout 500 -o resolvers.txt
         sed -i '/^$/d' resolvers.txt
         massdns/bin/massdns -q -r resolvers.txt --predictable -s 100 -o J -w nx_check.json nx_check.txt
