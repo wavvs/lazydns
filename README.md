@@ -1,30 +1,72 @@
 # lazydns
-Script to automate initial domain reconnaissance.
-## Tools
-Lazydns utilizes following tools:
-* [amass](https://github.com/OWASP/Amass)
-* [zdns](https://github.com/zmap/zdns)
-* [massdns](https://github.com/blechschmidt/massdns)
-* [shuffledns](https://github.com/projectdiscovery/shuffledns)
-* [dnsgen](https://github.com/ProjectAnte/dnsgen)
-* [dnsvalidator](https://github.com/vortexau/dnsvalidator)
-* [jq](https://github.com/stedolan/jq)
-* [argbash](https://github.com/matejak/argbash)
+Script to automate initial domain reconnaissance and subdomain enumeration.
 
-## How to use
+## Features
+* **Passive** and **Active** modes
+	* Sonar DNS [database](https://sonar.omnisint.io/) (Project Crobat)
+	* [Amass](https://github.com/OWASP/Amass)
+	* [zdns](https://github.com/zmap/zdns)
+	* [dnsgen](https://github.com/ProjectAnte/dnsgen)
+	* compiled [wordlists](https://github.com/wavvs/lazydns/tree/master/wordlists) from several sources 
+* Auto-updated list of [resolvers](https://github.com/wavvs/lazydns/blob/master/resolvers.txt) (updates every day)
+	* https://public-dns.info
+	* [dnsvalidator](https://github.com/vortexau/dnsvalidator)
+	* custom validation using [massdns](https://github.com/blechschmidt/massdns.git)
+## Info
 ```bash
-Usage: ./lazydns.sh [-u|--(no-)update] [--(no-)on-amass] [--(no-)on-wordlist] [--(no-)on-alt] [--(no-)wildcard] [-c|--config <arg>] [-w|--wordlist <arg>] [-r|--resolvers <arg>] [-t|--threads <arg>] [-s|--retries <arg>] [-m|--dm <arg>] [-h|--help] <domain>
-	<domain>: Domain to enumerate
-	-u, --update, --no-update: Update list of resolvers (off by default)
-	--on-amass, --no-on-amass: Enable Amass subdomain enumeration (on by default)
-	--on-wordlist, --no-on-wordlist: Enable subdomains bruteforce (on by default)
-	--on-alt, --no-on-alt: Enable alterations bruteforce (on by default)
-	--wildcard, --no-wildcard: Remove wildcard responses using shuffledns (off by default)
-	-c, --config: Amass configuration file (no default)
-	-w, --wordlist: Subdomains wordlist (default: 'normal.txt')
-	-r, --resolvers: List of resolvers (default: 'resolvers.txt')
-	-t, --threads: Subdomain bruteforce rate (default: '500')
-	-s, --retries: Subdomain bruteforce retries (default: '3')
-	-m, --dm: private tool (no default)
-	-h, --help: Prints help
+Usage: lazydns.py [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  -c, --config TEXT         Lazydns configuration file.
+  -d, --domain TEXT         Comma-separated domain names.  [required]
+  --dir PATH                Output directory.  [default: .]
+  -f, --base-filename TEXT  Base filename prefix.
+  --help                    Show this message and exit.
+
+Commands:
+  active   Active DNS enumeration.
+  passive  Passive DNS enumeration.
+```
+### Passive mode
+**Passive mode** includes:
+* Querying Sonar database from https://sonar.omnisint.io/
+* [Amass](https://github.com/OWASP/Amass) passive enumeration (specify API keys in configuration file)
+```bash
+Usage: lazydns.py passive [OPTIONS]
+
+  Passive DNS enumeration.
+
+Options:
+  --amass / --no-amass      Enable Amass passive enumeration.  [default: True]
+  --sonar / --no-sonar      SonarSearch enumeration.  [default: True]
+  --dm / --no-dm            [default: False]
+  -ac, --amass-config PATH  Amass configuration file.
+  --help                    Show this message and exit.
+```
+In passive mode script can generate following files:
+* {dir}/{base-filename}-amass-passive-{generated date}.log
+* {dir}/{base-filename}-{generated date}.passive
+### Active mode
+**Active** mode includes:
+* Brute-forcing subdomains using [zdns](https://github.com/zmap/zdns) and [Amass](https://github.com/OWASP/Amass)
+* Alterations generation using [dnsgen](https://github.com/ProjectAnte/dnsgen)
+```bash
+Usage: lazydns.py active [OPTIONS]
+
+  Active DNS enumeration.
+
+Options:
+  --amass / --no-amass      Enable Amass active enumeration.
+  --brute / --no-brute      Enable brute-forcing.
+  --alts / --no-alts        Enable alterations.
+  -ac, --amass-config PATH  Amass configuration file.
+  -w, --wordlist PATH       Subdomains wordlist.  [default:
+                            wordlists/normal.txt]
+  -ns, --resolvers PATH     List of name servers.  [default:
+                            resolvers.txt; required]
+  -t, --threads INTEGER     Number of threads passed to tool.  [default: 350]
+  -r, --retries INTEGER     Number of retries passed to tool.  [default: 3]
+  -k, --known PATH          File with known subdomains (i.e., from "passive"
+                            subcommand)
+  --help                    Show this message and exit.
 ```
