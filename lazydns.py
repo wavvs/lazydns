@@ -18,16 +18,20 @@ init(autoreset=True)
 
 
 PUBDNS_URL = 'https://public-dns.info/nameservers.csv'
-SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 SONAR_URL = 'https://sonar.omnisint.io/subdomains/{0}?page={1}'
+SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
 FILEDATE = time.strftime("%d-%m-%Y-%H-%M-%S")
 # Commands for passive DNS enumeration
 AMASS_PASSIVE = '{bin} enum -nolocaldb -passive -exclude "Brute Forcing" -d {domains} -log {log}'
 DM_PASSIVE = 'python3 {bin} -k {domain} -s 2'
 # Commands for active DNS enumeration
 AMASS_ACTIVE = '{bin} enum -nolocaldb -active -brute -d {domains} -log {log}'
-ZDNS_ACTIVE = '{bin} A --name-servers=@{ns} -input-file {input} -threads {threads} -retries {retries} -log-file {log}'
+ZDNS_ACTIVE = ('{bin} A --name-servers=@{ns} -input-file {input} '
+               '-threads {threads} -retries {retries} -log-file {log} '
+               '-go-processes {procs} -timeout 5')
 PROGRESS = 'pv -l -s {count}'
+JQ_NAME = 'jq -r \'select(.status=="NOERROR") | .name\' {file}'
+WCL = 'wc -l < {0}'
 
 
 def switch_clr(opt):
@@ -39,22 +43,32 @@ def switch(opt):
 
 
 @click.group()
-@click.option('--config', '-c', type=str, help='Lazydns configuration file.', default="")
-@click.option('--domain', '-d', type=str, help="Comma-separated domain names.", required=True)
-@click.option('--dir', type=click.Path(exists=False, resolve_path=True),
-              help='Output directory.', default='.', show_default=True)
-@click.option('--base-filename', '-f', type=str, help='Base filename prefix.')
+@click.option('--config', '-c', type=click.Path(exists=True), help='Lazydns configuration file.')
+@click.option('-d', 'domains', type=str, help="Comma-separated domain names.")
+@click.option('-df', 'domains_file', type=click.Path(exists=True), help='Path to file containing domain names.')
+@click.option('--dir', 'output_dir', type=click.Path(exists=False, resolve_path=True), help='Output directory.',
+              default='.', show_default=True)
+@click.option('--prefix', '-f', type=str, default='lazydns', help='Filename prefix to name all output files.',
+              show_default=True)
 @click.pass_context
-def lazydns(ctx, config, domain, dir, base_filename):
+def lazydns(ctx, config, domains, domains_file, output_dir, prefix):
     ctx.ensure_object(dict)
-    if not os.path.exists(dir):
-        os.mkdir(dir)
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
+    if domains is not None:
+        ctx.obj['domains'] = domains.split(',')
+    elif domains_file is not None:
+        with open(domains_file, 'r') as f:
+            ctx.obj['domains'] = f.read().splitlines()
+    else:
+        sys.exit(Fore.RED + '[!] Provide domain names via -d or -df!')
 
     bins = {
         'amass': os.path.join(SCRIPT_PATH, 'bin/amass'),
         'zdns': os.path.join(SCRIPT_PATH, 'bin/zdns'),
     }
-    if os.path.exists(config):
+    if config is not None:
         parser = configparser.ConfigParser()
         read_file = parser.read(config)
         if read_file[0] != config and 'tools' not in config:
@@ -71,22 +85,19 @@ def lazydns(ctx, config, domain, dir, base_filename):
         if not os.path.exists(bins[i]):
             sys.exit(Fore.RED + '[!] Cannot find "{}" binary at {}'.format(i, bins[i]))
 
-    if base_filename is None or len(base_filename) == 0:
-        base_filename = 'lazydns'
-    ctx.obj['domains'] = domain.split(',')
-    ctx.obj['dir'] = dir
-    ctx.obj['base_filename'] = base_filename
+    ctx.obj['output_dir'] = output_dir
+    ctx.obj['prefix'] = prefix
     ctx.obj['bins'] = bins
 
 
 @lazydns.command(help="Passive DNS enumeration.")
 @click.option('--amass/--no-amass', default=True, help='Enable Amass passive enumeration.', show_default=True)
 @click.option('--sonar/--no-sonar', default=True, help='SonarSearch enumeration.', show_default=True)
-@click.option('--dm/--no-dm', default=False, help='private', show_default=True)
+@click.option('--dm/--no-dm', default=False, hidden=True)
 @click.option('--amass-config', '-ac', type=click.Path(exists=True), help='Amass configuration file.')
 @click.pass_context
 def passive(ctx, amass, sonar, dm, amass_config):
-    print(Fore.BLUE + '[*] Performing passive DNS enumeration.')
+    print(Fore.BLUE + '[PASSIVE] Performing passive DNS enumeration.')
     print(switch_clr(amass) + '[!] Amass: {0}'.format(switch(amass)))
     print(switch_clr(sonar) + '[!] Sonar: {0}'.format(switch(sonar)))
     if dm:
@@ -94,8 +105,8 @@ def passive(ctx, amass, sonar, dm, amass_config):
 
     domains = ctx.obj['domains']
     bins = ctx.obj['bins']
-    base_filename = ctx.obj['base_filename']
-    dir = ctx.obj['dir']
+    prefix = ctx.obj['prefix']
+    output_dir = ctx.obj['output_dir']
     subdomains = set()
     if sonar:
         print(Fore.YELLOW + '[*] Sonar passive enumeration.')
@@ -107,7 +118,7 @@ def passive(ctx, amass, sonar, dm, amass_config):
 
     if amass:
         print(Fore.YELLOW + '[*] Amass passive enumeration.')
-        log_file = os.path.join(dir, '{0}-amass-passive-{1}.log'.format(base_filename, FILEDATE))
+        log_file = os.path.join(output_dir, '{0}-amass-passive-{1}.log'.format(prefix, FILEDATE))
         cmd = AMASS_PASSIVE.format(bin=bins['amass'], domains=','.join(domains), log=log_file)
         if amass_config is not None:
             cmd += ' -config {0}'.format(amass_config)
@@ -130,12 +141,10 @@ def passive(ctx, amass, sonar, dm, amass_config):
         else:
             print(Fore.RED + '[!] Specify DM script path.')
 
-    passive_file = os.path.join(dir, '{0}-{1}.passive'.format(base_filename, FILEDATE))
-    with open(passive_file, 'a') as fd:
+    passive_file = os.path.join(output_dir, '{0}-{1}.passive'.format(prefix, FILEDATE))
+    with open(passive_file, 'w') as f:
         if len(subdomains) > 0:
-            subdomains = list(subdomains)
-            subdomains.sort()
-            fd.write('\n'.join(subdomains) + '\n')
+            f.write('\n'.join(sorted(list(subdomains))) + '\n')
     print(Fore.BLUE + "[+] Found {0} subdomains on passive DNS enumeration.".format(len(subdomains)))
 
 
@@ -150,22 +159,25 @@ def passive(ctx, amass, sonar, dm, amass_config):
               help='List of name servers.', show_default=True, required=True)
 @click.option('--threads', '-t', type=int, default=350, help='Number of threads passed to tool.', show_default=True)
 @click.option('--retries', '-r', type=int, default=3, help='Number of retries passed to tool.', show_default=True)
-@click.option('--known', '-k', type=click.Path(exists=False), help='File with known subdomains (i.e., from "passive" subcommand)')
+@click.option('--processes', '-p', type=int, default=4, help='Number of processes passed to tool.', show_default=True)
+@click.option('--known', '-kf', type=click.Path(exists=False), help='File with known subdomains (i.e., from "passive" subcommand)')
+@click.option('--tool', type=click.Choice(['zdns']), default='zdns', help='Subdomains brute-forcing tool.', show_default=True)
 @click.pass_context
-def active(ctx, amass, brute, alts, amass_config, wordlist, resolvers, threads, retries, known):
-    print(Fore.BLUE + '[*] Performing active DNS enumeration.')
+def active(ctx, amass, brute, alts, amass_config, wordlist, resolvers, threads, retries, processes, known, tool):
+    print(Fore.BLUE + '[ACTIVE] Performing active DNS enumeration.')
     print(switch_clr(amass) + '[!] Amass: {0}'.format(switch(amass)))
     print(switch_clr(brute) + '[!] Brute-force: {0}'.format(switch(brute)))
     print(switch_clr(alts) + '[!] Alterations: {0}'.format(switch(alts)))
+
     domains = ctx.obj['domains']
     bins = ctx.obj['bins']
-    base_filename = ctx.obj['base_filename']
-    dir = ctx.obj['dir']
+    prefix = ctx.obj['prefix']
+    output_dir = ctx.obj['output_dir']
 
     if amass:
-        print(Fore.YELLOW + '[*] Amass active enumeration.')
-        log_file = os.path.join(dir, '{0}-amass-active-{1}.log'.format(base_filename, FILEDATE))
-        amass_output = os.path.join(dir, '{0}-{1}.amass'.format(base_filename, FILEDATE))
+        print(Fore.YELLOW + '[AMASS] Amass active enumeration.')
+        log_file = os.path.join(output_dir, '{0}-amass-active-{1}.log'.format(prefix, FILEDATE))
+        amass_output = os.path.join(output_dir, '{0}-{1}.amass'.format(prefix, FILEDATE))
         amass_cmd = AMASS_ACTIVE.format(bin=bins['amass'], domains=','.join(domains), log=log_file)
         if amass_config is not None:
             amass_cmd += ' -config {0}'.format(amass_config)
@@ -174,32 +186,42 @@ def active(ctx, amass, brute, alts, amass_config, wordlist, resolvers, threads, 
         out, err = execute_cmd(amass_cmd)
         if len(err) > 0 and len(out) == 0:
             sys.exit(Fore.RED + '[!] Amass: ' + err.decode())
-        subdomains = out.decode().splitlines()
-        subdomains.sort()
+        subdomains = sorted(out.decode().splitlines())
         with open(amass_output, 'w') as fd:
             fd.write('\n'.join(subdomains) + '\n')
-        print(Fore.BLUE + '[!] Amass found {0} subdomains on active enumeration.'.format(len(subdomains)))
+        print(Fore.BLUE + '[AMASS] Amass found {0} subdomains on active enumeration.'.format(len(subdomains)))
 
     if brute:
-        print(Fore.YELLOW + '[*] Subdomains brute-forcing using ZDNS.')
-        log_file = os.path.join(dir, '{0}-brute-{1}.log'.format(base_filename, FILEDATE))
-        brute_output = os.path.join(dir, '{0}-{1}.brute'.format(base_filename, FILEDATE))
+        print(Fore.YELLOW + '[BRUTE] Subdomains brute-force using {0}.'.format(tool.upper()))
+        log_file = os.path.join(output_dir, '{0}-brute-{1}.log'.format(prefix, FILEDATE))
+        brute_output = os.path.join(output_dir, '{0}-{1}.brute'.format(prefix, FILEDATE))
         brute_output_raw = brute_output + '.raw'
         _, tmp = tempfile.mkstemp()
         sed_cmd = 'sed "s/$/.{0}/" {1} >> {2}'
         for domain in domains:
             execute_cmd(sed_cmd.format(domain, wordlist, tmp))
-        out, _ = execute_cmd('wc -l < {0}'.format(tmp))
-        print(Fore.YELLOW + '[!] Total {0} subdomains to brute-force.'.format(out.decode()))
+        out, _ = execute_cmd(WCL.format(tmp))
+        total_subd = out.decode().strip()
+        print(Fore.YELLOW + '[BRUTE] Total {0} subdomains to brute-force.'.format(total_subd))
+        if tool == 'zdns':
+            zdns_cmd = ZDNS_ACTIVE.format(bin=bins[tool], ns=resolvers, input=tmp, threads=threads,
+                                          retries=retries, procs=processes, log=log_file)
+            brute_cmd = zdns_cmd + ' | {0} > {1}'.format(PROGRESS.format(count=total_subd), brute_output_raw)
+            execute_cmd(brute_cmd, stdout=None, stderr=None)
+            jq_cmd = '{0} > {1}'.format(JQ_NAME.format(file=brute_output_raw), brute_output)
+            execute_cmd(jq_cmd)
+            out, _ = execute_cmd(WCL.format(brute_output))
+            total_subd = out.decode().strip()
+            print(Fore.BLUE +
+                  '[BRUTE] {0} found {1} subdomains on active enumeration.'.format(tool.upper(), total_subd))
+            # TODO: If TIMEOUT is in raw output, print and remove faulty resolvers from the list and re-run subdomains resolve.
         os.remove(tmp)
-        print('TODO')
-
     if alts:
         print('TODO')
 
 
-def execute_cmd(cmd):
-    with Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE) as proc:
+def execute_cmd(cmd, shell=True, stdout=PIPE, stderr=PIPE):
+    with Popen(cmd, shell=shell, stdout=stdout, stderr=stderr) as proc:
         return proc.communicate()
 
 
