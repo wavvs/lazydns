@@ -1,6 +1,7 @@
 name: PublicDNS
 
 on:
+  push:
   schedule:
     - cron: "0 8 * * *"
 
@@ -14,23 +15,18 @@ jobs:
         fetch-depth: 0 
     - name: Validator
       run: |
-        sudo apt install -y jq gcc make
-        git clone https://github.com/blechschmidt/massdns.git && cd massdns
-        make && cd ..
-        git clone https://github.com/vortexau/dnsvalidator.git && cd dnsvalidator
-        pip3 install setuptools wheel 
-        sudo python3 setup.py install
-        cd .. && sudo rm -rf dnsvalidator
+        sudo apt install -y gcc make
+        pip3 install -r requirements.txt
+        sudo make massdns dnsvalidator
         python3 -c "from lazydns import fetch_resolvers; fetch_resolvers()" > tmp.txt
         python3 -c "from lazydns import gen_nxdomain; gen_nxdomain(25000, 'google.com'); gen_nxdomain(25000, 'youtube.com')" > nx_check.txt
         rm resolvers.txt
         dnsvalidator -tL tmp.txt -threads 10 -timeout 500 -o resolvers.txt
         sed -i '/^$/d' resolvers.txt
-        massdns/bin/massdns -q -r resolvers.txt --predictable -s 100 -o J -w nx_check.json nx_check.txt
+        bin/massdns -q -r resolvers.txt --predictable -s 150 -o J -w nx_check.json nx_check.txt
         cat nx_check.json | grep NOERROR | jq -r '.resolver' | awk -F ":" '{print $1}' | sort -u > bad_resolvers.txt
         for resolver in $(cat bad_resolvers.txt); do sed -i "/${resolver}/d" resolvers.txt; done
         sort -u -V resolvers.txt -o resolvers.txt
-        rm -rf massdns/
         rm tmp.txt
         rm nx_check.txt
         rm nx_check.json
