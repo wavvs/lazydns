@@ -3,9 +3,6 @@
 curr_dir = $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 bin_dir = $(curr_dir)bin
 $(shell mkdir -p $(bin_dir))
-gopath=$(shell go env GOPATH)
-gobin=$(shell go env GOPATH)
-
 
 all: zdns amass massdns dnsgen dnsvalidator pv jq clean
 
