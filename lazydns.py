@@ -52,11 +52,11 @@ class Cmd:
             '-input-file',
             input,
             '-threads',
-            threads,
+            str(threads),
             '-retries',
-            retries,
+            str(retries),
             '-go-processes',
-            procs,
+            str(procs),
             '-log-file',
             log
         ]
@@ -84,13 +84,13 @@ class Cmd:
         cmd = [
             'jq',
             '-r',
-            '\'select(.status=="NOERROR") | .name\'',
+            '\'select(.status=="NOERROR") | select(.data.answers != null) | .name\'',
             file
         ]
         return cmd
 
     @staticmethod
-    def execute(cmd, shell=True, stdout=PIPE, stderr=PIPE, **kwargs):
+    def execute(cmd, shell=False, stdout=PIPE, stderr=PIPE, **kwargs):
         with Popen(cmd, shell=shell, stdout=stdout, stderr=stderr, **kwargs) as proc:
             return proc.communicate()
 
@@ -246,19 +246,19 @@ def active(ctx, amass, brute, alts, amass_config, wordlist, resolvers, threads, 
         print(Fore.BLUE + f'[AMASS] Amass found {len(subdomains)} subdomains on active enumeration.')
 
     if brute:
-        print(Fore.YELLOW + f'[BRUTE] Subdomains brute-force using {tool.upper()}.'.format)
+        print(Fore.YELLOW + f'[BRUTE] Subdomains brute-force using {tool.upper()}.')
         _, tmp = tempfile.mkstemp()
         for domain in domains:
-            Cmd.execute(f'sed "s/$/.{domain}/" {wordlist} >> {tmp}')
-        out, _ = Cmd.execute(['wc', '-l', '<', tmp])
+            Cmd.execute(f'sed "s/$/.{domain}/" {wordlist} >> {tmp}', shell=True)
+        out, _ = Cmd.execute(['wc -l < {0}'.format(tmp)], shell=True)
         total_subdomains = out.decode().strip()
         print(Fore.YELLOW + f'[BRUTE] Total {total_subdomains} subdomains to brute-force.')
         if tool == 'zdns':
             zdns_cmd = Cmd.zdns(bins[tool], resolvers, tmp, threads, retries, processes, files['brute_log'])
             zdns_cmd += ['|'] + Cmd.pv(total_subdomains) + ['>', files['brute_json']]
-            Cmd.execute(zdns_cmd, stdout=None, stderr=None)
-            Cmd.execute(Cmd.jq(files['brute_json']) + ['>', files['brute']])
-            out, _ = Cmd.execute(['wc', '-l', '<', files['brute']])
+            Cmd.execute(" ".join(zdns_cmd), stdout=None, stderr=None, shell=True)
+            Cmd.execute(" ".join(Cmd.jq(files['brute_json']) + ['>', files['brute']]), shell=True)
+            out, _ = Cmd.execute(['wc -l < {0}'.format(files['brute'])], shell=True)
             total_subdomains = out.decode().strip()
             print(Fore.BLUE + f'[BRUTE] {tool.upper()} found {total_subdomains} subdomains on active enumeration.')
             # TODO: If TIMEOUT is in raw output, print and remove faulty resolvers from the list and re-run subdomains resolve.
